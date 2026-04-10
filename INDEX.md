@@ -64,16 +64,10 @@ Start here if you are new to the team or product.
 
 | File | Contents |
 |---|---|
-| [onboarding/01_environment_setup.md](onboarding/01_environment_setup.md) | Windows prerequisites, JDK 21, Maven, Eclipse 2023-09, network checklist |
-| [onboarding/02_build_runbook.md](onboarding/02_build_runbook.md) | Build order (h-pf → fv → vpa), commands, common errors and fixes |
-| [onboarding/03_developer_guide.md](onboarding/03_developer_guide.md) | Product overview, architecture, key concepts, code navigation |
+| [onboarding/01_developer_guide.md](onboarding/01_developer_guide.md) | Product overview, architecture, key concepts, code navigation |
+| [onboarding/02_environment_setup.md](onboarding/02_environment_setup.md) | Windows prerequisites, JDK 21, Maven, Eclipse 2023-09, network checklist |
+| [onboarding/03_build_runbook.md](onboarding/03_build_runbook.md) | Build order (h-pf → fv → vpa), commands, common errors and fixes |
 | [onboarding/04_faq.md](onboarding/04_faq.md) | General, build, architecture, and coding FAQs; Japanese comment translations |
-
-**Recommended reading order for new team members:**
-1. `03_developer_guide.md` — understand what the product is
-2. `01_environment_setup.md` — get your machine ready
-3. `02_build_runbook.md` — build and run it
-4. `04_faq.md` — answers to questions you'll have next
 
 ---
 
