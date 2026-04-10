@@ -148,8 +148,8 @@ Static analysis findings and broader quality assessment.
 | `architecture/` | 2 |
 | `testing/` | 2 |
 | `quality/` | 2 |
-| Root | 1 (this file) |
-| **Total** | **31** |
+| Root | 2 (INDEX.md, README.md) |
+| **Total** | **32** |
 
 ---
 
