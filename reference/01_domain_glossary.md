@@ -30,6 +30,9 @@
 | **Repeat / Live** | Repeat Scanning | Continuous scanning loop — "live view". The microscope scans repeatedly, updating the display in real time. State: `S_PF_LSM_REPEAT_SCANNING`. |
 | **Series** | Series Acquisition | A defined sequence of image captures (z-stack, time-lapse, multi-channel, or combination). Managed by `SequenceManagerImpl`. State: `S_PF_LSM_SERIES_SCANNING`. |
 | **MATL** | Multi-Area Time-Lapse | Protocol for acquiring images from multiple physical stage positions (areas) over multiple time points. The most complex subsystem — 70 states, 70+ events. Plugin: `hpf.protocol.matl`. |
+| **MATL CompositeHPFModel** | Composite Model | Each MATL image tab's `CompositeHPFModel` contains **two `HPFImage`s**: an **area image** (the acquisition image, axis varies by mode) and a **map image** (a static overview scan with no playback axes). The `ImageContentView` lifecycle iterates each image and creates a `PlayerComposite` per image. |
+| **MATL Acquisition Modes** | Cycle / Lambda / Z-stack / Lambda Excitation | Determine the area image's playback axis: `TIMELAPSE` (Cycle, defaultMax grows), `LAMBDA` (defaultMax > 1 at creation), `ZSTACK` (defaultMax > 1 at creation), `LAMBDAEX` (same as Lambda). The map image always has zero playback axes. See US-62077 for axis-presence handling. |
+| **AxisType** | Player Axis Enum | `TIMELAPSE`, `LAMBDA`, `LAMBDAEX`, `ZSTACK`. Use `player.getUiAxisParam(AxisType.XXX)` to test for a specific axis (returns `null` if not present). |
 | **Protocol** | Acquisition Protocol | A defined script/procedure for automated experiments. Consists of Tasks organized in Cycles. Executed by `ProtocolExecutorImpl`. |
 | **Cycle** | Acquisition Cycle | One complete iteration of a repeating acquisition pattern in a protocol. A time-lapse protocol has N cycles. |
 | **Task** | Protocol Task | The fundamental unit of protocol execution. Has three phases: `TASK_BEGIN`, `TASK_MIDDLE`, `TASK_END`. |
@@ -81,8 +84,14 @@
 | **FVComponentDomain** | A logical grouping of related services (analogous to a DI container). Examples: `MessageDomain`, `DeviceDomain`. |
 | **FVComponentService** | Base interface for all HPF services. Accessed via domain lookups, not direct instantiation. |
 | **ApplicationRootHandler** | Interface for code that runs during application startup. Priority-ordered (DESCENDING). |
-| **FunctionEnablerService** | State machine controlling which UI functions are enabled, based on acquisition state, license, and device status. |
-| **StateID** | String identifier for a system state in `FunctionEnablerService`. Examples: `S_PF_LSM_IMAGING_IDLING`, `S_PF_LSM_SERIES_SCANNING`. |
+| **FunctionEnablerService** | Declarative engine that decides which UI functions are enabled/disabled/valid based on which `StateID`s are currently active. **Not** the same as `StateMachine.java` (which controls acquisition transitions); this service consumes state changes among other inputs. Lookup: `FunctionEnablerDomain.getService(FunctionEnablerService.ID)`. |
+| **FunctionEnablerDomain** | Component domain that owns `FunctionEnablerService`. ID: `jp.co.olympus.hpf.core.component.enabler`. Use this for service lookup — **not** `MessageDomain`. |
+| **StateID** | String identifier for a system state consumed by `FunctionEnablerService`. Examples: `S_PF_LSM_IMAGING_IDLING`, `S_PF_LSM_SERIES_SCANNING`, `S_PF_CAMERA_CONNECTED`, `S_PF_LICENSE_*`. Multiple states can be active simultaneously. Subsystems publish via `activate(stateId)`. |
+| **functionId** | String identifier for a UI feature/action governed by `FunctionEnablerService`. Examples: `F_FV_SERIES_SCAN_START`, `F_MATL_SHIFT_Z`. Subscribers register listeners on a functionId; the engine maps active states → condition for that function. |
+| **Condition** | Per-function verdict produced by `FunctionEnablerService`. Carries enable/disable/valid/range information — richer than a bare boolean. Located in `jp.co.olympus.hpf.core.engine.enabler.condition`. |
+| **`*.condition` file** | XML rule file (extension `.condition`, constant `FunctionEnablerService.STATE_TABLE_EXTENSION`) that declares which combinations of active `StateID`s enable/disable a `functionId`. Loaded at boot from every plugin that ships them. Pure data — adding a rule requires no Java change. |
+| **FunctionConditionChangedListener** | Three-method callback for `FunctionEnablerService` subscribers: `enableChanged`, `functionConditionChanged`, `validationChanged`. **Not** a single-method functional interface — lambdas don't apply. |
+| **DeferTargetStates** | `FunctionEnablerService.setDeferTargetStates(List<String>)` mechanism that suppresses notifications for transitional states. When the list is cleared, only the **last-set** exclusive state in each group fires — prevents UI flicker through intermediate states. |
 | **MessageDomain** | Component domain providing `ErrorDispatchService` and legacy `MessageDeliveryService`. |
 | **RiJEvent** | Base class for all MATL protocol engine events. Each event has a unique `long` ID. |
 | **EventProviderImpl** | Active Object implementation for async event dispatch. Uses a blocking queue + worker thread. |
@@ -93,3 +102,19 @@
 | **P2** | Eclipse's provisioning platform — package management system for Eclipse plugins/features. |
 | **Feature** | Eclipse grouping of related plugins for installation/update purposes. Defined in `feature.xml`. |
 | **Fragment** | An OSGi bundle that extends another bundle (the "host"). Used for platform-specific native code (e.g., `*.win32.win32.x86_64`). |
+
+---
+
+## UI Framework Terms (SWT / JFace / Draw2D)
+
+| Term | Definition |
+|---|---|
+| **SWT** | Standard Widget Toolkit — Eclipse's native-rendering UI library. **Single-threaded**: all widget operations must run on the display thread. Use `SWTHelper.execSyncInDisplayThread(control, Runnable)` to marshal. |
+| **CoolBar** | SWT toolbar wrapper. In FluoView, `FVCommonCoolBar` wraps the SWT CoolBar in a `ContentView`. Each `CoolItem` holds a player composite for one image. **`addItemComposite()` is not idempotent** — every call creates a new CoolItem. To insert at a specific position, use the `new CoolItem(coolbar, SWT.NONE, index)` indexed constructor directly. |
+| **Drag-handle thumb** | The dotted 3px×7px line `FVCommonCoolBar.paintControl` draws for **every** CoolItem — even zero-sized ones produce a visible artifact. Removing the empty CoolItem entirely (not just hiding it) is the correct fix when an item should not appear. |
+| **PlayerComposite** | Base channel/Z/Lambda playback control composite (`fv.ui.image.player.parts`). One per `HPFImage` in a tab. |
+| **AxisComposite** | Renders axis sliders by iterating `player.getUiAxisParamList()`. Subclass `MATLAxisComposite` adds T-axis special handling for the cycle case. |
+| **MATLPlayerComposite** | MATL-specific `PlayerComposite` — only swaps the axis composite for `MATLAxisComposite`. Very thin. |
+| **UiAxisParam events** | `EventType.POSITION` (slider moved), `DEFAULT_MAX` (max value updated, e.g., new cycle data), `MAX` (hard max changed). Register via `addParamChangeListener`. |
+| **ContentView coolbar** | Private `FVCommonCoolBar` field on `ContentView` — no accessor. Subclasses must walk the widget hierarchy upward (`getParent()` chain) to obtain the reference. |
+| **Widget identity** | SWT widgets do not override `Object.equals()`. Use `==` for widget comparisons — matches codebase convention (e.g., `item.getControl() == deleteComposite` in `FVCommonCoolBar.removeItemComposite`). |

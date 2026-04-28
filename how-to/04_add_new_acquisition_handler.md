@@ -20,11 +20,12 @@ public class MyFeatureApplicationHandler implements ApplicationRootHandler {
 
     @Override
     public void onPostInitialization() {
-        // Get services from their component domains
+        // Get services from their component domains.
+        // NB: each service has its OWN domain — pick the right one.
         deviceControlService = (DeviceControlService)
             DeviceDomain.getService("jp.co.olympus.hpf.device.component.deviceservice");
         functionEnablerService = (FunctionEnablerService)
-            MessageDomain.getService("jp.co.olympus.hpf.core.enabler.service");
+            FunctionEnablerDomain.getService(FunctionEnablerService.ID);
 
         // Load saved settings
         loadSavedSettings();
@@ -167,10 +168,20 @@ If your handler needs to gate UI elements by state:
 // Activate state (enables linked UI)
 functionEnablerService.activate("MY_FEATURE_READY");
 
-// Listen for state changes from other parts of the system
+// Listen for state changes from other parts of the system.
+// NOTE: FunctionConditionChangedListener has THREE methods — a lambda will not compile.
 functionEnablerService.addFunctionConditionChangedListener(
     "MY_FUNCTION_ID",
-    condition -> updateUI(condition.isEnabled())
+    new FunctionConditionChangedListener() {
+        @Override
+        public void enableChanged(String functionId, boolean isEnable) {
+            updateUI(isEnable);
+        }
+        @Override
+        public void functionConditionChanged(String functionId, Condition condition) { }
+        @Override
+        public void validationChanged(String functionId, boolean isValid) { }
+    }
 );
 
 // Defer conflicting states during complex transitions
@@ -196,17 +207,24 @@ public void onPostInitialization() {
 
 ### Pattern: React to acquisition state changes
 ```java
+// Listen on a functionId, not a stateId — the engine maps states to function condition.
 functionEnablerService.addFunctionConditionChangedListener(
-    "S_PF_LSM_SERIES_SCANNING",
-    condition -> {
-        if (condition.isEnabled()) {
-            onAcquisitionStarted();
-        } else {
-            onAcquisitionStopped();
+    "F_FV_ACQUISITION_RUNNING",
+    new FunctionConditionChangedListener() {
+        @Override
+        public void enableChanged(String functionId, boolean isEnable) {
+            if (isEnable) onAcquisitionStarted();
+            else          onAcquisitionStopped();
         }
+        @Override
+        public void functionConditionChanged(String fId, Condition c) { }
+        @Override
+        public void validationChanged(String fId, boolean ok) { }
     }
 );
 ```
+
+> **See also:** `how-to/05_function_enabler_feature.md` for end-to-end publisher/subscriber/`*.condition` example.
 
 ### Pattern: Dispatch errors correctly
 ```java

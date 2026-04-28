@@ -95,6 +95,8 @@ Step-by-step guides for common development tasks.
 | [how-to/02_add_new_file_format.md](how-to/02_add_new_file_format.md) | Adapter, factory, index factory, info util, extension point registration |
 | [how-to/03_add_new_analysis_module.md](how-to/03_add_new_analysis_module.md) | Module, CommandHandler, CommandFactoryProvider with code examples |
 | [how-to/04_add_new_acquisition_handler.md](how-to/04_add_new_acquisition_handler.md) | ApplicationRootHandler, Component/Service registration, state patterns |
+| [how-to/05_function_enabler_feature.md](how-to/05_function_enabler_feature.md) | End-to-end pattern: `.condition` rule file + publisher + subscriber for any UI feature gated by `FunctionEnablerService` |
+| [how-to/06_ui_framework_patterns.md](how-to/06_ui_framework_patterns.md) | SWT/CoolBar/Player composite gotchas + MATL composite model — distilled from US-62077 |
 
 ---
 
@@ -105,7 +107,7 @@ Rationale for major architectural choices made during platform design.
 | File | Contents |
 |---|---|
 | [architecture/01_adrs.md](architecture/01_adrs.md) | 6 ADRs: Extension Points, Win32 Native, EMF/ECORE, HPFRoot Singleton, 3-project split, EventProviderImpl |
-| [architecture/02_technical_debt_register.md](architecture/02_technical_debt_register.md) | 60+ debt items in 10 categories with severity ratings and remediation priorities |
+| [architecture/02_technical_debt_register.md](architecture/02_technical_debt_register.md) | **Single canonical tech debt source** — 70+ items in 11 categories, with type / risk / priority master index, plus per-category detail and delivery-cohort remediation plan |
 
 ---
 
@@ -138,12 +140,12 @@ Static analysis findings and broader quality assessment.
 | `diagrams/` | 11 |
 | `onboarding/` | 4 |
 | `reference/` | 5 |
-| `how-to/` | 4 |
+| `how-to/` | 6 |
 | `architecture/` | 2 |
 | `testing/` | 2 |
 | `quality/` | 2 |
 | Root | 2 (INDEX.md, README.md) |
-| **Total** | **32** |
+| **Total** | **34** |
 
 ---
 

@@ -33,22 +33,52 @@ Centralised error, warning, and information dispatch to all registered listeners
 
 ### `FunctionEnablerService`
 **Package:** `jp.co.olympus.hpf.core.enabler.component`
+**Component:** `FunctionEnablerDomain` (NOT `MessageDomain`)
+**Service ID:** `jp.co.olympus.hpf.core.enabler.service`
 
-State machine controlling feature enable/disable based on acquisition state, license, and device status.
+Declarative enable/disable engine for UI features. Maps activated **stateId**s (acquisition state, license, device status, etc.) to current **Condition** for each **functionId** via `*.condition` XML rule files.
+
+> **Distinct from `StateMachine.java`.** That governs acquisition transitions; this governs UI feature availability and is *driven by* state changes (among other inputs).
+
+#### Lookup
+```java
+FunctionEnablerService svc = (FunctionEnablerService)
+    FunctionEnablerDomain.getService(FunctionEnablerService.ID);
+```
+
+#### Methods (verified against the interface)
 
 | Method | Description |
 |---|---|
-| `activate(String stateId)` | Activate a state |
-| `activateAll(List<String>)` | Batch activate states |
-| `deactivate(String stateId)` | Deactivate a state |
-| `isEnable(String functionId)` | Check if function is currently enabled |
-| `getFunctionCondition(String functionId)` | Get condition rules for a function |
-| `hasPossibilityChange(String functionId)` | Check if state could change |
-| `isAvailableAndStable(String functionId)` | Check for stability |
-| `addFunctionConditionChangedListener(String, Listener)` | Subscribe to state changes |
-| `setDeferTargetStates(List<String>)` | Defer conflicting state updates |
-| `addStateTransitionValidator(StateTransitionValidator)` | Add custom transition validation |
-| `copyActivateStates(FunctionEnablerService)` | Copy active states to another instance |
+| `activate(String stateId)` | Activate a state. Auto-deactivates exclusive-pair counterparts declared in the rule files. |
+| `activateAll(List<String> stateIdList)` | Batch activate; engine recomputes once at the end. |
+| `isEnable(String functionId)` | Current enabled boolean. Listener only fires on **change** — call this for the initial state when subscribing. |
+| `isValid(String functionId)` | Validity (e.g., value-in-range) verdict. |
+| `isAvailableAndStable(String functionId)` | True only when enabled **and** not in a transitional state. Use before triggering long actions. |
+| `hasPossibilityChange(String functionId)` | Hint that the verdict may flip soon — useful for pre-disabling to avoid races. |
+| `getFunctionCondition(String functionId)` | Full `Condition` (richer than a bool). |
+| `addFunctionConditionChangedListener(String, FunctionConditionChangedListener)` | Subscribe. Listener has three callbacks: `enableChanged`, `functionConditionChanged`, `validationChanged`. **Not a single-method functional interface — a lambda will not compile.** |
+| `removeFunctionConditionChangedListener(...)` | Unsubscribe — wire to widget dispose listener. |
+| `setDeferTargetStates(List<String>)` | Defer notifications for the listed states (and their exclusive partners) until the list is cleared; only the last-set exclusive state fires when released. Suppresses transitional flicker. |
+| `addStateTransitionValidator(StateTransitionValidator)` | Reject illegal state combinations. |
+| `removeStateTransitionValidator(...)` | Pair to the above. |
+| `getCloneFunctionEnablerService()` | Isolated copy with same StateTable + active states — for what-if/preview computations. |
+| `copyAcitavateStates(FunctionEnablerService)` *(sic — typo in interface)* | Copy active states from this instance into another. |
+| `getAllState()` | Returns `List<List<DebugState>>`; for InfoView only — `@Deprecated`. |
+| `addDebugStateListener` / `removeDebugStateListener` | InfoView only — `@Deprecated`. |
+| `setStateTable(DocumentRoot)` | InfoView only — `@Deprecated`. |
+
+#### Rule files
+Loaded at boot from any plugin that ships `*.condition` XML (extension constant `FunctionEnablerService.STATE_TABLE_EXTENSION = ".condition"`). Each file declares which combinations of active stateIds enable / disable / validate which functionIds. Pure data — no Java required to add a new rule.
+
+#### Listener interface (`FunctionConditionChangedListener`)
+```java
+void enableChanged(String functionId, boolean isEnable);
+void functionConditionChanged(String functionId, Condition condition);
+void validationChanged(String functionId, boolean isValid);
+```
+
+See `how-to/05_function_enabler_feature.md` for end-to-end sample.
 
 ---
 

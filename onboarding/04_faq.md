@@ -81,3 +81,57 @@ These Japanese comments often mark `TODO` items or known limitations. See `archi
 
 **Q: How do I write a test for a new plugin?**  
 A: Create a companion test plugin named `{your-plugin}.test` in the `test/plugins/` directory of the same project. Use `HPFExtensionRegistry` test support to inject mock extension points. See `testing/02_test_plan.md` for the test strategy.
+
+---
+
+## UI / SWT
+
+**Q: I called `coolbar.addItemComposite(myComposite)` twice and got two CoolItems with my widget. Bug?**  
+A: Not a bug — `FVCommonCoolBar.addItemComposite()` is **not** idempotent. Every call creates a new `CoolItem`. Track ownership yourself, or use the indexed `new CoolItem(coolbar, SWT.NONE, index)` constructor when you need positional insertion (e.g., re-inserting at the original slot after a remove).
+
+**Q: A removed/deferred CoolItem leaves a small dotted line on screen. Where does that come from?**  
+A: `FVCommonCoolBar.paintControl` draws a drag-handle thumb (3px × 7px dotted line) for **every** CoolItem in the bar — including zero-sized ones. The fix is to **remove the CoolItem entirely**, not just hide it. This was the root cause of US-62077; see `architecture/02_technical_debt_register.md` (UI framework category) and the project notes at `C:\home\claude\US-62077`.
+
+**Q: Why does the codebase use `==` to compare SWT widgets instead of `.equals()`?**  
+A: SWT widgets do not override `Object.equals()`, so `.equals()` is identity-compare anyway. `==` is the codebase convention (see `FVCommonCoolBar.removeItemComposite`). Use `==` for widget identity checks.
+
+**Q: I changed a child composite's size — why doesn't the screen update?**  
+A: SWT does not auto-propagate layout. Walk up the parent chain after the change:
+```java
+Composite parent = changedWidget.getParent();
+while (parent != null && !parent.isDisposed()) {
+    parent.layout(true, true);
+    parent = parent.getParent();
+}
+```
+
+**Q: I have a non-UI thread that needs to call `setEnabled(false)` on a button. What's the safe pattern?**  
+A: Marshal to the SWT display thread:
+```java
+SWTHelper.execSyncInDisplayThread(button, () -> {
+    if (!button.isDisposed()) button.setEnabled(false);
+});
+```
+Inside the runnable, widgets you entered with are still valid — defensive disposed-checks outside this guarantee are noise.
+
+**Q: My `FunctionConditionChangedListener` lambda doesn't compile. Why?**  
+A: It's not a single-method functional interface. The interface has three methods (`enableChanged`, `functionConditionChanged`, `validationChanged`). Use an anonymous class or implement explicitly. Most UI code only needs `enableChanged` — leave the other two empty.
+
+**Q: I'm doing complex state transitions and the UI flickers between enabled/disabled. Fix?**  
+A: Wrap the transition with `setDeferTargetStates`. Listeners only see the final stable state once the deferred list is cleared. Pattern:
+```java
+enabler.setDeferTargetStates(List.of("S_PF_TRANSITIONING"));
+try {
+    enabler.activate("S_PF_TRANSITIONING");
+    doWork();
+    enabler.activate("S_PF_FINAL_STATE");
+} finally {
+    enabler.setDeferTargetStates(List.of());
+}
+```
+
+**Q: I'm overwriting a Japanese comment with my English translation. Is that the convention?**  
+A: No — preserve the Japanese comment. Add an English comment alongside it (or above it) for new code. The team has explicitly requested this.
+
+**Q: Where is the application's `main` method?**  
+A: There isn't a classic `main()` — this is an Eclipse RCP app. The Equinox launcher invokes `FVApplication.start(IApplicationContext)` at `jp.co.olympus.fluoview.FVApplication`. See `onboarding/01_developer_guide.md` ▸ "Finding Your Way Around the Code".
